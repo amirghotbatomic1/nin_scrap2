@@ -199,8 +199,8 @@ function testExtractArchiveGroup(firstArchiveFile, password = DEFAULT_PASSWORD) 
         };
     }
 
-    // Standalone NSP / XCI / NSZ
-    if (['.nsp', '.xci', '.nsz'].includes(ext)) {
+    // Standalone NSP / XCI / NSZ / NUP
+    if (['.nsp', '.xci', '.nsz', '.xcz', '.nup'].includes(ext)) {
         const stat = fs.statSync(firstArchiveFile);
         if (stat.size < 1024 * 1024) {
             return { success: false, message: `File size too small (${formatBytes(stat.size)}) for a valid Switch ROM` };

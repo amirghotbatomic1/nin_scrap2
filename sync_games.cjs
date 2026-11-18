@@ -490,9 +490,9 @@ function inspectFileMagicBytes(filePath) {
 
         if (bytesRead < 16) return { type: 'corrupt', description: 'File too small' };
 
-        // 1. Check NSP / NSZ (PFS0 Header at 0x00: 'PFS0' -> 0x50 0x46 0x53 0x30)
+        // 1. Check NSP / NSZ / NUP (PFS0 Header at 0x00: 'PFS0' -> 0x50 0x46 0x53 0x30)
         if (buf[0] === 0x50 && buf[1] === 0x46 && buf[2] === 0x53 && buf[3] === 0x30) {
-            return { type: 'NSP', description: 'Nintendo Switch PFS0 Container (NSP/NSZ)' };
+            return { type: 'NSP', description: 'Nintendo Switch PFS0 Container (NSP/NSZ/NUP)' };
         }
 
         // 2. Check XCI (HEAD Magic at 0x100: 'HEAD' -> 0x48 0x45 0x41 0x44)
@@ -528,11 +528,11 @@ function inspectFileMagicBytes(filePath) {
 }
 
 /**
- * Ensures the downloaded file is a valid raw Switch ROM (.nsp/.xci/.nsz).
+ * Ensures the downloaded file is a valid raw Switch ROM (.nsp/.xci/.nsz/.nup).
  * If the downloaded file is an archive (.rar, .7z, .zip), it automatically extracts
- * the inner ROM file and returns the path to the extracted .nsp/.xci file.
+ * the inner ROM file and returns the path to the extracted .nsp/.xci/.nup file.
  */
-function processAndValidateRomFile(filePath, destDir) {
+function processAndValidateRomFile(filePath, destDir, isSwitch2 = false) {
     let magic = inspectFileMagicBytes(filePath);
     console.log(`    🔍 File format detection: ${magic.description} (${magic.type})`);
 
@@ -540,9 +540,9 @@ function processAndValidateRomFile(filePath, destDir) {
         throw new Error('Downloaded file is an HTML error page from storage server.');
     }
 
-    // If it's already a valid NSP or XCI, return it directly
-    if (magic.type === 'NSP' || magic.type === 'XCI') {
-        console.log(`    ✅ Verified valid Nintendo Switch ${magic.type} header magic bytes.`);
+    // If it's already a valid NSP, XCI or NUP, return it directly
+    if (magic.type === 'NSP' || magic.type === 'XCI' || (isSwitch2 && (/\.(nup|nsp|xci)$/i.test(filePath) || magic.type !== 'UNKNOWN'))) {
+        console.log(`    ✅ Verified valid Nintendo Switch ROM (${magic.type}).`);
         return filePath;
     }
 
@@ -592,7 +592,7 @@ function processAndValidateRomFile(filePath, destDir) {
             }
         }
 
-        // Recursively find extracted NSP, XCI, or NSZ file
+        // Recursively find extracted ROM files (.nsp, .xci, .nsz, .xcz, .nup)
         const findRomFiles = (dir) => {
             let results = [];
             const list = fs.readdirSync(dir);
@@ -601,7 +601,7 @@ function processAndValidateRomFile(filePath, destDir) {
                 const stat = fs.statSync(fullPath);
                 if (stat.isDirectory()) {
                     results = results.concat(findRomFiles(fullPath));
-                } else if (/\.(nsp|xci|nsz|xcz)$/i.test(f) || stat.size > 30 * 1024 * 1024) {
+                } else if (/\.(nsp|xci|nsz|xcz|nup)$/i.test(f) || stat.size > 30 * 1024 * 1024) {
                     results.push(fullPath);
                 }
             }
@@ -619,14 +619,26 @@ function processAndValidateRomFile(filePath, destDir) {
                 throw new Error(`Archive extracted successfully but no ROM or archive file was found inside.`);
             }
 
-            // Pick largest candidate file
-            candidates.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size);
-            const candidatePath = candidates[0];
+            // Prioritize genuine ROM extensions (.nup, .nsp, .xci, .nsz, .xcz) over arbitrary internal game assets (e.g. .blarc.zs)
+            const romExtCandidates = candidates.filter(f => /\.(nsp|xci|nsz|xcz|nup)$/i.test(f));
+            const candidatePool = romExtCandidates.length > 0 ? romExtCandidates : candidates;
+
+            // Pick largest candidate file in prioritized pool
+            candidatePool.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size);
+            const candidatePath = candidatePool[0];
             const candidateMagic = inspectFileMagicBytes(candidatePath);
 
             if (candidateMagic.type === 'NSP' || candidateMagic.type === 'XCI') {
                 extractedRomPath = candidatePath;
                 extractedMagic = candidateMagic;
+                break;
+            }
+
+            // If it's a Switch 2 platform or has .nup extension, accept it without requiring Switch 1 PFS0/HEAD magic
+            if (isSwitch2 || /\.nup$/i.test(candidatePath)) {
+                console.log(`    🎮 Recognized Switch 2 ROM format: "${path.basename(candidatePath)}" (${candidateMagic.description})`);
+                extractedRomPath = candidatePath;
+                extractedMagic = { type: 'NUP', description: 'Nintendo Switch 2 ROM Package (NUP)' };
                 break;
             }
 
@@ -664,6 +676,11 @@ function processAndValidateRomFile(filePath, destDir) {
         try { fs.unlinkSync(filePath); } catch { }
 
         return extractedRomPath;
+    }
+
+    // Switch 2 or NUP standalone fallback
+    if (isSwitch2 || /\.nup$/i.test(filePath)) {
+        return filePath;
     }
 
     throw new Error(`Downloaded file is invalid or unreadable: ${magic.description}`);
@@ -1389,7 +1406,8 @@ async function run() {
 
                             // Step B: Validate header magic bytes & auto-extract source RAR/ZIP if required
                             console.log(`    🔍 Inspecting file header & magic bytes...`);
-                            const validRomPath = processAndValidateRomFile(downloadedFilePath, DEST_DIR);
+                            const isSwitch2Game = currentPlatform === 'Nintendo Switch 2';
+                            const validRomPath = processAndValidateRomFile(downloadedFilePath, DEST_DIR, isSwitch2Game);
                             if (multiPartTempDir && fs.existsSync(multiPartTempDir)) {
                                 try { fs.rmSync(multiPartTempDir, { recursive: true, force: true }); } catch { }
                             }
