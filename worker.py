@@ -50,12 +50,6 @@ def download_video(url, output_dir, cookie_path=None):
         'quiet': False,
         'no_warnings': False,
         'remote_components': ['ejs:github'],
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'tv_embedded', 'web_creator', 'web'],
-                'player_skip': ['webpage', 'configs'],
-            }
-        },
         'age_limit': 99,
     }
 
@@ -64,20 +58,32 @@ def download_video(url, output_dir, cookie_path=None):
         print(f"🍪 استفاده از فایل کوکی: {cookie_path}")
         ydl_opts['cookiefile'] = cookie_path
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    def _attempt_download(opts):
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(target_url, download=True)
             video_id = info.get('id')
             title = info.get('title')
             ext = info.get('ext', 'mp4')
             file_path = os.path.join(output_dir, f"{video_id}.{ext}")
-            
+
             print(f"\n✅ دانلود با موفقیت کامل شد!")
             print(f"📌 عنوان: {title}")
             print(f"📁 مسیر ذخیره: {file_path}")
             return file_path
+
+    try:
+        return _attempt_download(ydl_opts)
     except Exception as e:
         print(f"❌ خطا در دانلود ویدیو: {e}")
+        # در صورت خطای 403 یا مشکل کوکی، یک بار بدون کوکی تلاش مجدد شود
+        if 'cookiefile' in ydl_opts:
+            print("🔄 تلاش مجدد بدون کوکی (احتمال منقضی شدن YOUTUBE_COOKIES)...")
+            fallback_opts = {k: v for k, v in ydl_opts.items() if k != 'cookiefile'}
+            try:
+                return _attempt_download(fallback_opts)
+            except Exception as fallback_err:
+                print(f"❌ تلاش مجدد بدون کوکی نیز ناموفق بود: {fallback_err}")
+                print("💡 لطفاً مقدار YOUTUBE_COOKIES را در GitHub Secrets با کوکی جدید (از پنجره Incognito) به‌روزرسانی کنید.")
         return None
 
 def upload_to_hamrahi(file_path, folder_name="Videos"):
