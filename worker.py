@@ -44,8 +44,9 @@ def download_video(url, output_dir, cookie_path=None):
     print(f"🎬 در حال دانلود ویدیو از: {target_url}")
     
     ydl_opts = {
-        # اولویت کیفیت حداقل 720p (یا 1080p در صورت وجود، و اگر نبود بهترین موجود)
-        'format': 'bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height>=720]+bestaudio/best[height>=720]/bestvideo+bestaudio/best',
+        # دانلود بالاترین کیفیت ممکن ویدیو و صدا و ادغام در قالب mp4
+        'format': 'bestvideo+bestaudio/best',
+        'merge_output_format': 'mp4',
         'outtmpl': os.path.join(output_dir, '%(id)s.%(ext)s'),
         'quiet': False,
         'no_warnings': False,
@@ -63,8 +64,12 @@ def download_video(url, output_dir, cookie_path=None):
             info = ydl.extract_info(target_url, download=True)
             video_id = info.get('id')
             title = info.get('title')
-            ext = info.get('ext', 'mp4')
-            file_path = os.path.join(output_dir, f"{video_id}.{ext}")
+            requested_downloads = info.get('requested_downloads') or []
+            file_path = requested_downloads[0].get('filepath') if requested_downloads else None
+            if not file_path or not os.path.exists(file_path):
+                mp4_path = os.path.join(output_dir, f"{video_id}.mp4")
+                ext = info.get('ext', 'mp4')
+                file_path = mp4_path if os.path.exists(mp4_path) else os.path.join(output_dir, f"{video_id}.{ext}")
 
             print(f"\n✅ دانلود با موفقیت کامل شد!")
             print(f"📌 عنوان: {title}")
