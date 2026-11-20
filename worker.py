@@ -44,9 +44,17 @@ def download_video(url, output_dir, cookie_path=None):
     print(f"🎬 در حال دانلود ویدیو از: {target_url}")
     
     ydl_opts = {
-        # دانلود بالاترین کیفیت ممکن ویدیو و صدا و ادغام در قالب mp4
-        'format': 'bestvideo+bestaudio/best',
+        # کیفیت بهینه تا حداکثر 1080p با کدک H.264/AAC (مناسب اینستاگرام و لود سریع در اینترنت ایران)
+        'format': (
+            'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/'
+            'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/'
+            'bestvideo[height<=1080]+bestaudio/'
+            'best[height<=1080]/best'
+        ),
         'merge_output_format': 'mp4',
+        'postprocessor_args': {
+            'merger': ['-movflags', '+faststart'],
+        },
         'outtmpl': os.path.join(output_dir, '%(id)s.%(ext)s'),
         'quiet': False,
         'no_warnings': False,
