@@ -1,0 +1,37 @@
+name: 🔄 Daily Auto-Sync Emulator Releases (Lichii, Fritchii, Eden NX2, BananaNative)
+
+on:
+  schedule:
+    # Run everyday at 04:00 UTC (07:30 Iran Standard Time)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-sync-emulators:
+    name: 🚀 Check Releases, Download & Upload to AbreHamrahi
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Install High-Speed Download Tools (Aria2 & Curl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2 curl
+
+      - name: ⚡ Run Emulator Auto-Sync & Version Cleanup
+        env:
+          ABREHAMRAHI_REFRESH_TOKEN: ${{ secrets.ABREHAMRAHI_REFRESH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          SYNC_API_TOKEN: ${{ secrets.SYNC_API_TOKEN }}
+        run: |
+          cd scripts/youtube-downloader
+          node auto_sync_emulator_releases.cjs
