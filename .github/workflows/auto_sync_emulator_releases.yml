@@ -33,5 +33,7 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           SYNC_API_TOKEN: ${{ secrets.SYNC_API_TOKEN }}
         run: |
-          cd scripts/youtube-downloader
+          if [ -d "scripts/youtube-downloader" ]; then
+            cd scripts/youtube-downloader
+          fi
           node auto_sync_emulator_releases.cjs
