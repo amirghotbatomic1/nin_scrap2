@@ -834,7 +834,7 @@ async function run() {
         try {
             let gameData = null;
             const siteUrlToCheck = item.target_site_url || (item.nswpedia_url && item.nswpedia_url.includes(new URL(API_BASE_URL).hostname) ? item.nswpedia_url : null);
-            const isExternalScrapeUrl = item.nswpedia_url && !item.nswpedia_url.includes(new URL(API_BASE_URL).hostname) && (item.nswpedia_url.includes('switch-romz') || item.nswpedia_url.includes('nswpedia') || item.nswpedia_url.includes('nsvault') || item.nswpedia_url.includes('nintendo-roms'));
+            const isExternalScrapeUrl = item.nswpedia_url && !item.nswpedia_url.includes(new URL(API_BASE_URL).hostname) && (item.nswpedia_url.includes('switch-romz') || item.nswpedia_url.includes('nswpedia') || item.nswpedia_url.includes('nsvault') || item.nswpedia_url.includes('nswvault') || item.nswpedia_url.includes('nintendo-roms'));
 
             if (!isExternalScrapeUrl && siteUrlToCheck) {
                 console.log(`🌐 Fetching existing game details from site API: ${siteUrlToCheck}...`);

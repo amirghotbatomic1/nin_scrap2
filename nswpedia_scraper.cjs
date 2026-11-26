@@ -40,7 +40,7 @@ function fetchUrl(urlStr, options = {}, retries = 4) {
             defaultRef = 'https://switch-romz.com/';
         } else if (parsedUrl.hostname.includes('nintendo-roms.com')) {
             defaultRef = 'https://nintendo-roms.com/';
-        } else if (parsedUrl.hostname.includes('nsvault.com')) {
+        } else if (parsedUrl.hostname.includes('nswvault.com')) {
             defaultRef = 'https://nswvault.com/';
         } else if (parsedUrl.hostname.includes('nsvault.me') || parsedUrl.hostname.includes('dlsitex.online')) {
             defaultRef = 'https://nsvault.me/';
