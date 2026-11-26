@@ -40,6 +40,8 @@ function fetchUrl(urlStr, options = {}, retries = 4) {
             defaultRef = 'https://switch-romz.com/';
         } else if (parsedUrl.hostname.includes('nintendo-roms.com')) {
             defaultRef = 'https://nintendo-roms.com/';
+        } else if (parsedUrl.hostname.includes('nsvault.com')) {
+            defaultRef = 'https://nswvault.com/';
         } else if (parsedUrl.hostname.includes('nsvault.me') || parsedUrl.hostname.includes('dlsitex.online')) {
             defaultRef = 'https://nsvault.me/';
         }
@@ -849,10 +851,15 @@ async function resolveDirectDownloadLink(downloadListUrl, options = {}) {
         const html = res.body;
 
         // 1. Direct storage servers and mirrors (including Dlsitex high speed storage, Vikingfile, 1Fichier, Mediafire, share.zip, etc.)
-        const directMatch = html.match(/href=['"](https?:\/\/(?:s\d+\.dlsitex\.online|vikingfile|share\.zip|1fichier|datanodes|multiup|rushupload|mediafire|mega|megaup|drive\.google)[^'"]+)['"]/i);
+        const directMatch = html.match(/href=['"](https?:\/\/(?:s\d+\.dlsitex\.online|vikingfile|share\.zip|1fichier|datanodes|multiup|rushupload|mediafire|mega|megaup|drive\.google|send\.cm|pixeldrain)[^'"]+)['"]/i);
+
+        // 1.5 NSWVault dl-ready container or "click here" link
+        const dlReadyMatch = html.match(/<div\b[^>]*id=['"]dl-ready['"][^>]*>[\s\S]*?<a\b[^>]+href=['"](https?:\/\/[^'"]+)['"]/i) ||
+                             html.match(/<a\b[^>]+href=['"](https?:\/\/[^'"]+)['"][^>]*>\s*click\s+here\s*<\/a>/i);
 
         // 2. Button with class btn-download or id download-link
-        const btnMatch = html.match(/<a\b[^>]*\bclass=['"][^'"]*btn-download[^'"]*['"][^>]*\bhref=['"]([^'"]+)['"]/i) ||
+        const btnMatch = dlReadyMatch ||
+                         html.match(/<a\b[^>]*\bclass=['"][^'"]*btn-download[^'"]*['"][^>]*\bhref=['"]([^'"]+)['"]/i) ||
                          html.match(/<a\b[^>]*\bhref=['"]([^'"]+)['"][^>]*\bclass=['"][^'"]*btn-download[^'"]*['"]/i);
 
         const match = btnMatch ||
@@ -905,11 +912,12 @@ function sanitizeDisplayTitle(rawTitle) {
     // Remove "Download " prefix
     title = title.replace(/^\s*Download\s+/i, '');
 
-    // Remove site brand if present (NSWpedia, NSVault, Nintendo-ROMs, or Switch-Romz)
-    title = title.replace(/\s*[-–|]\s*(?:NSWpedia(?:\.com)?|NSVault(?:\.me)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*$/i, '');
-    title = title.replace(/^(?:NSWpedia(?:\.com)?|NSVault(?:\.me)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*[-–|:]*\s*/i, '');
-    title = title.replace(/\s*Switch\s*[-–|]\s*(?:NSWpedia|NSVault(?:\.me)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*$/i, '');
+    // Remove site brand if present (NSWpedia, NSVault, NSWVault, Nintendo-ROMs, or Switch-Romz)
+    title = title.replace(/\s*[-–|]\s*(?:NSWpedia(?:\.com)?|NSVault(?:\.(?:me|com))?|NSWVault(?:\.com)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*$/i, '');
+    title = title.replace(/^(?:NSWpedia(?:\.com)?|NSVault(?:\.(?:me|com))?|NSWVault(?:\.com)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*[-–|:]*\s*/i, '');
+    title = title.replace(/\s*Switch\s*[-–|]\s*(?:NSWpedia|NSVault(?:\.(?:me|com))?|NSWVault(?:\.com)?|Nintendo-?ROMs?(?:\.com)?|Switch-?Romz?(?:\.com)?)\s*$/i, '');
     title = title.replace(/\s+Switch\s+(?:NSP(?:\/XCI)?|XCI)\s+(?:ROM|Rom).*/i, '');
+    title = title.replace(/\s+(?:NSP|XCI)\s+Switch\s+ROM\s+Download.*/i, '');
 
     // Remove ROM terms, formats, versions, updates, DLC suffixes
     title = title.replace(/\s*\[(?:DLC|Update|DLC\/Update|eShop)\]/gi, '');
@@ -978,12 +986,13 @@ function extractGameTitle(html, fallbackSlug = '') {
  * Scrape complete game page from NSWPedia or NSVault, including metadata and download mirrors
  */
 async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency: 5 }) {
-    const isNsVault = /nsvault\.me/i.test(gameUrl) || /dlsitex\.online/i.test(gameUrl);
+    const isNsVault = /nsvault\.me/i.test(gameUrl) || /dlsitex\.online/i.test(gameUrl) || /nswvault\.com/i.test(gameUrl);
     const isNintendoRoms = /nintendo-roms\.com/i.test(gameUrl);
     const isSwitchRomz = /switch-romz\.com/i.test(gameUrl);
     let defaultReferer = 'https://nswpedia.com/';
     if (isSwitchRomz) defaultReferer = 'https://switch-romz.com/';
     else if (isNintendoRoms) defaultReferer = 'https://nintendo-roms.com/';
+    else if (/nswvault\.com/i.test(gameUrl)) defaultReferer = 'https://nswvault.com/';
     else if (isNsVault) defaultReferer = 'https://nsvault.me/';
 
     let initialHtml;
@@ -1046,6 +1055,7 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
                      mainHtml.match(/Title ID\s*<\/span>\s*<span[^>]*font-mono[^>]*>([0-9A-Fa-f]{16})<\/span>/i) ||
                      mainHtml.match(/Title ID:\s*<span[^>]*>([0-9A-Fa-f]{16})<\/span>/i) ||
                      mainHtml.match(/<span[^>]*class=['"]gh-meta-label['"][^>]*>\s*Title ID\s*<\/span>\s*<span[^>]*class=['"]gh-meta-value['"][^>]*>\s*([0-9A-Fa-f]{16})\s*<\/span>/i) ||
+                     mainHtml.match(/<span[^>]*class=['"]info-label['"][^>]*>\s*Title ID\s*<\/span>\s*<span[^>]*class=['"]info-value['"][^>]*>\s*([0-9A-Fa-f]{16})\s*<\/span>/i) ||
                      mainHtml.match(/Title ID:\s*([0-9A-Fa-f]{16})/i);
     if (tidMatch) titleId = tidMatch[1].trim();
 
@@ -1053,6 +1063,7 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
     const rdMatch = mainHtml.match(/Release Date<\/span>\s*<span[^>]*>([^<]+)<\/span>/i) ||
                     mainHtml.match(/Release Date[^<]*<\/span>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
                     mainHtml.match(/<span[^>]*class=['"]gh-meta-label['"][^>]*>\s*Release(?:\s+Date)?\s*<\/span>\s*<span[^>]*class=['"]gh-meta-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
+                    mainHtml.match(/<span[^>]*class=['"]info-label['"][^>]*>\s*Release(?:\s+Date)?\s*<\/span>\s*<span[^>]*class=['"]info-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
                     mainHtml.match(/<tr>\s*<th>\s*Released\s*<\/th>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/i) ||
                     mainHtml.match(/Release Date:\s*([^<]+)<br/i);
     if (rdMatch) releaseDate = stripHtml(rdMatch[1]);
@@ -1061,6 +1072,7 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
     const fwMatch = mainHtml.match(/Required Firmware<\/span>\s*<span[^>]*>([^<]+)<\/span>/i) ||
                     mainHtml.match(/Required Firmware[^<]*<\/span>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
                     mainHtml.match(/<span[^>]*class=['"]gh-meta-label['"][^>]*>\s*(?:Required\s+)?Firmware\s*<\/span>\s*<span[^>]*class=['"]gh-meta-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
+                    mainHtml.match(/<span[^>]*class=['"]info-label['"][^>]*>\s*(?:Required\s+)?Firmware\s*<\/span>\s*<span[^>]*class=['"]info-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
                     mainHtml.match(/<tr>\s*<th>\s*Firmware\s*<\/th>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/i) ||
                     mainHtml.match(/Required Firmware:([\s\S]*?)<\/strong>/i) ||
                     mainHtml.match(/Required Firmware:\s*([^<]+)<br/i);
@@ -1070,6 +1082,7 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
     const pubMatch = mainHtml.match(/Published by<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/i) ||
                      mainHtml.match(/Published by[^<]*<\/span>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i) ||
                      mainHtml.match(/<span[^>]*class=['"]gh-meta-label['"][^>]*>\s*Publisher\s*<\/span>\s*<span[^>]*class=['"]gh-meta-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
+                     mainHtml.match(/<span[^>]*class=['"]info-label['"][^>]*>\s*(?:Publisher|Developer)\s*<\/span>\s*<span[^>]*class=['"]info-value['"][^>]*>([\s\S]*?)<\/span>/i) ||
                      mainHtml.match(/<tr>\s*<th>\s*Publisher\s*<\/th>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/i) ||
                      mainHtml.match(/Publisher:\s*([^<]+)<br/i);
     if (pubMatch) publisher = stripHtml(pubMatch[1]);
@@ -1083,16 +1096,23 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
                     mainHtml.match(/<meta\s+content=['"]([^'"]+)['"]\s+property=['"]og:image['"]/i) ||
                     dlHtml.match(/<meta\s+property=['"]og:image['"]\s+content=['"]([^'"]+)['"]/i);
     if (ogMatch && !/logo|default|placeholder/i.test(ogMatch[1])) {
-        cover = ogMatch[1];
+        // If og:image is a wide banner (e.g. nswvault banner.webp), save as banner and check for portrait cover
+        if (/banner/i.test(ogMatch[1])) {
+            banner = ogMatch[1];
+        } else {
+            cover = ogMatch[1];
+        }
     }
 
     // Check specific cover art image tag (NSVault main cover art or Ziperto cover)
     if (!cover) {
         const coverArtMatch = mainHtml.match(/<img\b[^>]*\balt=['"][^'"]*cover art[^'"]*['"][^>]*\bsrc=['"]([^'"]+)['"]/i) ||
                               mainHtml.match(/<img\b[^>]*\bsrc=['"]([^'"]+)['"][^>]*\balt=['"][^'"]*cover art[^'"]*['"]/i) ||
-                              mainHtml.match(/<img\b[^>]*\bsrc=['"]([^'"]+cover[^'"]*)['"]/i);
+                              mainHtml.match(/<img\b[^>]*\bsrc=['"]([^'"]+cover[^'"]*)['"]/i) ||
+                              mainHtml.match(/<img\b[^>]*\bsrc=['"]([^'"]*(?:wp-content\/uploads\/[^\/]+\/[^\/]+\/[^\/'"]+\.webp))['"][^>]*class=['"][^'"]*(?:rounded|shadow|object-cover)[^'"]*['"]/i) ||
+                              mainHtml.match(/"thumbnailUrl":\s*"([^"]+)"/i);
         if (coverArtMatch) {
-            cover = coverArtMatch[1];
+            cover = coverArtMatch[1].replace(/\\\//g, '/');
         }
     }
 
@@ -1166,9 +1186,12 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
     while ((sMatch = ssImgRegex.exec(mainHtml)) !== null) {
         let ssUrl = sMatch[1];
         if (ssUrl && !/logo|icon|avatar|favicon/i.test(ssUrl)) {
-            ssUrl = ssUrl.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
-            if (!screenshots.includes(ssUrl) && ssUrl !== cover) {
-                screenshots.push(ssUrl);
+            // Only clean dimensions if it actually matched a screenshot keyword, not related games
+            if (/screenshot|shot\d+/i.test(ssUrl)) {
+                ssUrl = ssUrl.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
+                if (!screenshots.includes(ssUrl) && ssUrl !== cover && ssUrl !== banner) {
+                    screenshots.push(ssUrl);
+                }
             }
         }
     }
@@ -1219,6 +1242,52 @@ async function scrapeGame(gameUrl, options = { resolveMirrors: true, concurrency
 
     // 6. Parse download tables & version cards (NSWPedia format & NSVault / Dlsitex format)
     const mirrorTables = [];
+
+    // 6.05 Check NSWVault (nswvault.com) "Available download links" section
+    const nswvDlSecMatch = dlHtml.match(/Available download links[\s\S]*?<\/ul>/i) ||
+                           mainHtml.match(/Available download links[\s\S]*?<\/ul>/i);
+    if (nswvDlSecMatch) {
+        const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+        let liMatch;
+        while ((liMatch = liRegex.exec(nswvDlSecMatch[0])) !== null) {
+            const liContent = liMatch[1];
+            const nameMatch = liContent.match(/<p\b[^>]*class=['"][^'"]*font-bold[^'"]*['"][^>]*>([^<]+)<\/p>/i);
+            const itemName = nameMatch ? stripHtml(nameMatch[1]).trim() : title;
+
+            const linkRegex = /<a\b[^>]+href=['"]([^'"]+)['"][^>]*>([^<]+)<\/a>(?:[\s\S]*?<span[^>]*>\s*\(([^)]+)\)\s*<\/span>)?/gi;
+            let lMatch;
+            const items = [];
+
+            while ((lMatch = linkRegex.exec(liContent)) !== null) {
+                const intermediateUrl = lMatch[1].trim();
+                if (!intermediateUrl.includes('/download/')) continue;
+
+                const serverName = stripHtml(lMatch[2]).trim();
+                const rawSize = lMatch[3] ? stripHtml(lMatch[3]).trim() : '';
+                const size = /\b(KB|MB|GB|TB|B)\b/i.test(rawSize) ? rawSize : '';
+
+                const details = parseRomItemDetails(itemName, '');
+
+                items.push({
+                    name: itemName,
+                    serverName,
+                    size,
+                    format: details.format,
+                    type: details.type,
+                    version: details.version,
+                    intermediateUrl,
+                    directUrl: null
+                });
+            }
+
+            if (items.length > 0) {
+                mirrorTables.push({
+                    serverName: itemName,
+                    items
+                });
+            }
+        }
+    }
 
     // 6.1 Check NSVault / Dlsitex .version-card structure
     const vCardRegex = /<div class="version-card">([\s\S]*?)(?=(?:<div class="version-card">|<div class="help-block"|<\/div>\s*<\/div>\s*<div class="help-block"|$))/gi;
